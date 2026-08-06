@@ -1,5 +1,9 @@
 [deploy]
-startCommand = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+buildCommand = "pip install -r requirements.txt"
+startCommand = "python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health"
 healthcheckTimeout = 30
 restartPolicyType = "ON_FAILURE"
+
+[deploy.env]
+PYTHONPATH = "."
