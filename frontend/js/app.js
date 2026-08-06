@@ -2,10 +2,10 @@
  * TruthLens 前端主逻辑
  */
 
-// API地址 - 开发环境用localhost，生产环境同域名
+// API地址 - 生产环境用Railway后端，开发环境用localhost
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:8000'
-    : '';
+    : 'https://truthlens-production-ab83.up.railway.app';
 
 // DOM
 const inputView = document.getElementById('input-view');

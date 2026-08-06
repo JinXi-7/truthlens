@@ -1,15 +1,25 @@
 """分析路由 - 接收对话文本，返回阿谀奉承分析结果。"""
 
 import logging
+import functools
 from fastapi import APIRouter, Request, HTTPException
 from typing import List
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, field_validator
 
 from backend.middleware.rate_limit import limiter
 from backend.utils.counter import increment_counter, generate_share_text
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def rate_limit(limit_str: str):
+    """限流装饰器，如果slowapi不可用则跳过。"""
+    def decorator(func):
+        if limiter is not None:
+            return limiter.limit(limit_str)(func)
+        return func
+    return decorator
 
 
 class AnalyzeRequest(BaseModel):
@@ -53,7 +63,7 @@ class AnalyzeResponse(BaseModel):
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-@limiter.limit("3/hour")
+@rate_limit("3/hour")
 async def analyze_conversation(request: Request, body: AnalyzeRequest):
     """分析AI对话中的阿谀奉承行为。"""
     from backend.services.analyzer_service import analyze_text
