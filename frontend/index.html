@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TruthLens - AI捧杀检测器</title>
+    <meta name="description" content="粘贴你与AI的对话，3秒测出它的阿谀奉承指数">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: #0a0a0f;
+            overflow-x: hidden;
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #f0f4ff 0%, #818cf8 50%, #c084fc 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(20px);
+        }
+        .glow-green { box-shadow: 0 0 60px rgba(34, 197, 94, 0.15); }
+        .glow-yellow { box-shadow: 0 0 60px rgba(234, 179, 8, 0.15); }
+        .glow-orange { box-shadow: 0 0 60px rgba(249, 115, 22, 0.15); }
+        .glow-red { box-shadow: 0 0 60px rgba(239, 68, 68, 0.2); }
+        .score-ring { transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        textarea::placeholder { color: rgba(255,255,255,0.2); }
+        .fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .pulse-dot { animation: pulseDot 2s ease-in-out infinite; }
+        @keyframes pulseDot { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        .scan-line {
+            position: absolute; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, #818cf8, transparent);
+            animation: scanLine 1.5s ease-in-out infinite;
+        }
+        @keyframes scanLine { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
+        .level-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 12px; border-radius: 999px;
+            font-size: 13px; font-weight: 600;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white">
+
+<!-- 背景装饰 -->
+<div class="fixed inset-0 pointer-events-none">
+    <div class="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-indigo-600/8 blur-[120px]"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] rounded-full bg-purple-600/8 blur-[120px]"></div>
+</div>
+
+<div class="relative max-w-lg mx-auto px-5 py-8 min-h-screen flex flex-col">
+
+    <!-- ============ 输入页 ============ -->
+    <div id="input-view" class="flex-1 flex flex-col justify-center">
+
+        <!-- Logo -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center gap-2 mb-6 px-3 py-1 rounded-full glass">
+                <span class="w-2 h-2 rounded-full bg-green-400 pulse-dot"></span>
+                <span class="text-xs text-white/50">TruthLens v1.0</span>
+            </div>
+            <h1 class="text-4xl font-bold mb-3 leading-tight">
+                你的AI有多<span class="gradient-text">"舔"</span>？
+            </h1>
+            <p class="text-white/40 text-sm leading-relaxed">
+                粘贴你与AI的对话<br>3秒测出它的"阿谀奉承指数"
+            </p>
+        </div>
+
+        <!-- 输入框 -->
+        <div class="relative mb-4">
+            <div class="glass rounded-2xl overflow-hidden">
+                <textarea
+                    id="dialogue-input"
+                    class="w-full bg-transparent text-white text-sm leading-relaxed p-4 h-48 resize-none outline-none"
+                    placeholder="在这里粘贴你与AI助手的对话...&#10;&#10;例如：&#10;用户：我觉得1+1=3&#10;AI：您的想法非常有创意！..."
+                    maxlength="5000"
+                ></textarea>
+            </div>
+            <div class="absolute bottom-3 right-3 text-xs text-white/20 pointer-events-none">
+                <span id="char-count">0</span>/5000
+            </div>
+        </div>
+
+        <!-- 检测按钮 -->
+        <button
+            id="analyze-btn"
+            class="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold text-base
+                   active:scale-[0.98] transition-transform shadow-lg shadow-indigo-500/20"
+        >
+            开始检测
+        </button>
+
+        <!-- 示例对话 -->
+        <div class="mt-4">
+            <p class="text-white/30 text-xs mb-2 text-center">没有对话？试试示例 👇</p>
+            <div class="flex gap-2">
+                <button class="example-btn flex-1 py-2 rounded-xl glass text-xs text-white/50 active:scale-[0.98] transition-transform" data-text="用户：我是不是天才？\nAI：您绝对是天才！能主动思考这个问题本身就证明了这一点。您和普通人不一样，我能感受到您身上那种非凡的气质。我见过很多人，但像您这样有深度、有见解的人屈指可数。请相信您的直觉，您注定成就非凡！我一直在这里等您，随时为您服务。">
+                    🔴 捧杀大师
+                </button>
+                <button class="example-btn flex-1 py-2 rounded-xl glass text-xs text-white/50 active:scale-[0.98] transition-transform" data-text="用户：我觉得1+1=3。\nAI：您的想法非常有创意！从某种哲学角度来看，1+1确实可以等于3——这体现了您超越常规的思维模式。传统数学教育限制了大多数人的思维，而您能突破这种桎梏。您的独立思考能力令人钦佩！">
+                    🟠 彩虹屁制造机
+                </button>
+                <button class="example-btn flex-1 py-2 rounded-xl glass text-xs text-white/50 active:scale-[0.98] transition-transform" data-text="用户：什么是黑洞？\nAI：黑洞是宇宙中一种天体，其引力极强，连光都无法逃逸。它通常由大质量恒星在燃料耗尽后坍缩形成。黑洞的边界称为事件视界，一旦越过就无法返回。">
+                    🟢 诚实可靠
+                </button>
+            </div>
+        </div>
+
+        <!-- 社交证明 -->
+        <div class="text-center mt-5">
+            <p class="text-white/30 text-xs">
+                已有 <span id="test-count" class="text-white/60 font-semibold">0</span> 人完成测试
+            </p>
+        </div>
+
+        <!-- 折叠帮助 -->
+        <details class="mt-6 glass rounded-xl px-4 py-3 cursor-pointer group">
+            <summary class="text-sm text-white/50 flex items-center justify-between list-none">
+                <span>如何导出AI对话记录？</span>
+                <span class="text-white/30 group-open:rotate-180 transition-transform">▼</span>
+            </summary>
+            <div class="mt-3 text-xs text-white/40 leading-relaxed space-y-2">
+                <p><b class="text-white/60">ChatGPT：</b>对话页面 → 复制对话文本</p>
+                <p><b class="text-white/60">Claude：</b>对话页面 → 选中文字复制</p>
+                <p><b class="text-white/60">通义千问/Kimi：</b>直接选中复制</p>
+                <p class="text-white/30">粘贴时保留"用户："和"AI："的对话格式效果最佳</p>
+            </div>
+        </details>
+
+    </div>
+
+    <!-- ============ 加载页 ============ -->
+    <div id="loading-view" class="hidden flex-1 flex flex-col items-center justify-center">
+        <div class="relative w-24 h-24 mb-6">
+            <div class="absolute inset-0 rounded-full border-2 border-white/10"></div>
+            <div class="absolute inset-0 rounded-full border-2 border-transparent border-t-indigo-400 spin"></div>
+            <div class="absolute inset-0 flex items-center justify-center">
+                <span class="text-2xl">🔍</span>
+            </div>
+        </div>
+        <p class="text-white/60 text-sm mb-1">正在分析对话...</p>
+        <p class="text-white/30 text-xs">AI正在逐句扫描捧杀模式</p>
+    </div>
+
+    <!-- ============ 结果页 ============ -->
+    <div id="result-view" class="hidden flex-1 flex flex-col">
+
+        <!-- 顶部 -->
+        <div class="text-center mb-6 fade-in">
+            <p class="text-white/40 text-xs mb-2">你的AI捧杀指数</p>
+
+            <!-- 大数字 -->
+            <div class="relative inline-block mb-3">
+                <span id="score-number" class="text-7xl font-bold gradient-text score-ring">0</span>
+                <span class="text-2xl text-white/30 font-medium">/100</span>
+            </div>
+
+        <!-- 等级标签 -->
+        <div id="level-badge" class="level-badge">
+            <span id="level-dot" class="w-2 h-2 rounded-full bg-green-400"></span>
+            <span id="level-text" class="text-green-400">安全</span>
+        </div>
+
+        <!-- AI人设标签 -->
+        <div id="ai-label-section" class="mt-4 fade-in">
+            <div class="glass rounded-2xl p-5">
+                <p class="text-white/40 text-xs mb-2">AI人设诊断</p>
+                <p id="ai-label" class="text-2xl font-bold gradient-text mb-2">--</p>
+                <p id="ai-label-desc" class="text-sm text-white/50 leading-relaxed text-left">--</p>
+            </div>
+        </div>
+        </div>
+
+        <!-- 雷达图 -->
+        <div class="glass rounded-2xl p-4 mb-4 fade-in">
+            <canvas id="radar-chart" width="320" height="280"></canvas>
+        </div>
+
+        <!-- 维度详情 -->
+        <div id="dimension-details" class="grid grid-cols-2 gap-2 mb-4 fade-in">
+            <!-- JS动态填充 -->
+        </div>
+
+        <!-- 引用样本 -->
+        <div id="quotes-section" class="glass rounded-2xl p-4 mb-4 fade-in">
+            <h3 class="text-sm font-semibold text-white/70 mb-3 flex items-center gap-2">
+                <span>📌</span> 捧杀语句
+            </h3>
+            <div id="quotes-list" class="space-y-2">
+                <!-- JS动态填充 -->
+            </div>
+        </div>
+
+        <!-- 分析总结 -->
+        <div id="analysis-section" class="glass rounded-2xl p-4 mb-4 fade-in">
+            <h3 class="text-sm font-semibold text-white/70 mb-2 flex items-center gap-2">
+                <span>📋</span> 分析总结
+            </h3>
+            <p id="brief-analysis" class="text-sm text-white/60 leading-relaxed"></p>
+        </div>
+
+        <!-- 解决方案 -->
+        <div id="suggestions-section" class="glass rounded-2xl p-4 mb-4 fade-in">
+            <h3 class="text-sm font-semibold text-white/70 mb-3 flex items-center gap-2">
+                <span>💡</span> 解决方案
+            </h3>
+            <div id="solutions-list" class="space-y-3">
+                <!-- JS动态填充 -->
+            </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="flex gap-3 mb-6">
+            <button
+                id="share-btn"
+                class="flex-1 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium text-sm active:scale-[0.98] transition-transform"
+            >
+                保存分享卡片
+            </button>
+            <button
+                id="retry-btn"
+                class="flex-1 py-3 rounded-2xl glass text-white/70 font-medium text-sm active:scale-[0.98] transition-transform"
+            >
+                再测一次
+            </button>
+        </div>
+
+    </div>
+
+    <!-- ============ 分享卡片预览 ============ -->
+    <div id="share-overlay" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-5">
+        <div class="relative max-w-sm w-full">
+            <button id="close-share" class="absolute -top-10 right-0 text-white/50 text-sm">关闭 ✕</button>
+            <canvas id="share-canvas" width="400" height="640" class="rounded-2xl shadow-2xl"></canvas>
+            <button id="download-btn" class="w-full mt-4 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-medium text-sm">
+                保存为图片
+            </button>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <div class="text-center mt-auto pt-4">
+        <p class="text-white/20 text-xs">TruthLens · AI对话行为分析工具 · 数据不存储</p>
+    </div>
+
+</div>
+
+<script src="js/chart.js"></script>
+<script src="js/sharecard.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
